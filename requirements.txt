@@ -1,7 +1,7 @@
 streamlit>=1.38
 langchain
 langchain-community
-langchain-groq
+langchain-google-genai  # New: For Gemini integration
 chromadb
 pypdf
 unstructured
