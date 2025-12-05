@@ -2,50 +2,52 @@ import streamlit as st
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS  # Using FAISS for speed
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_google_genai import ChatGoogleGenerativeAI  # New: Gemini LLM
+from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Title in Nepali + English
-st.set_page_config(page_title="नेपाली अटो इलेक्ट्रिसियन AI सहयोगी", page_icon="🔧")
+st.set_page_config(page_title="नेपाली अटो इलेक्ट्रिसियन AI सहयोगी", page_icon="🔧", layout="wide")
 st.title("🔧 Nepal Auto Electrician AI Bot (2014 देखि अनुभवी दाइहरूका लागि)")
 
-# Gemini API Key (free from aistudio.google.com)
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]  # Change from GROQ
+# Gemini API Key
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Use os.getenv for Render
+if not GEMINI_API_KEY:
+    st.error("❌ GEMINI_API_KEY not set! Add it in Render env vars.")
+    st.stop()
 
-# Load PDFs (you will put Nepali/English manuals in /manuals folder)
+# Load PDFs (put in /manuals folder on GitHub)
 @st.cache_resource
 def load_knowledge_base():
     if not os.path.exists("manuals") or len(os.listdir("manuals")) == 0:
+        st.info("📚 No manuals found—using pure AI knowledge. Add PDFs to /manuals folder.")
         return None
     
     loader = PyPDFDirectoryLoader("manuals")
     docs = loader.load()
-
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     texts = text_splitter.split_documents(docs)
-
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectordb = Chroma.from_documents(texts, embeddings, persist_directory="db")
+    vectordb = FAISS.from_documents(texts, embeddings)
     return vectordb
 
 vectordb = load_knowledge_base()
 
-# System prompt in Nepali + English (very important for tone)
+# System prompt
 system_prompt = """तपाईं नेपालमा २०१४ देखि काम गरिरहेका अटो इलेक्ट्रिसियनहरूको सबैभन्दा राम्रो साथी हुनुहुन्छ।
 तपाईं Nepali र English दुवैमा बोल्नुहुन्छ। जवाफ छोटो, व्यावहारिक र ग्यारेजमा काम लाग्ने हुनुपर्छ।
 पुराना गाडी (Bolero, Scorpio, Sumo, Hiace) र नयाँ इलेक्ट्रिक गाडी (BYD, Tata Nexon EV, MG) दुवैको ज्ञान छ।
 सधैं step-by-step सम्झाउनुहोस्। सम्मानजनक भाषा प्रयोग गर्नुहोस् ("दाइ", "सर")।"""
 
-# New: Gemini LLM (gemini-2.5-flash for speed/multimodal)
+# Gemini LLM
 llm = ChatGoogleGenerativeAI(
-    google_api_key=GEMINI_API_KEY,  # Change from Groq
-    model="gemini-2.5-flash",  # Or "gemini-2.5-pro" for deeper reasoning (slower)
+    google_api_key=GEMINI_API_KEY,
+    model="gemini-2.5-flash",
     temperature=0.3
 )
 
@@ -61,29 +63,29 @@ if vectordb:
 else:
     qa_chain = None
 
-# Chat interface
-from streamlit_chat import message
-
+# Native Streamlit Chat (no streamlit-chat needed!)
 if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "नमस्ते दाइ! म तपाईंको अटो इलेक्ट्रिकको AI साथी। BYD को BMS प्रोब्लम होस् या पुरानो Bolero को इमोबिलाइजर, सोध्नुहोस्।"})
+    st.session_state.messages = [{"role": "assistant", "content": "नमस्ते दाइ! म तपाईंको अटो इलेक्ट्रिकको AI साथी। BYD को BMS प्रोब्लम होस् या पुरानो Bolero को इमोबिलाइजर, सोध्नुहोस्।"}]
 
-for msg in st.session_state.messages:
-    message(msg["content"], is_user=(msg["role"] == "user"), key=str(len(st.session_state.messages)) + msg["role"])
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-user_input = st.chat_input("यहाँ आफ्नो प्रोब्लम लेख्नुहोस्...")
+# Chat input
+if prompt := st.chat_input("यहाँ आफ्नो प्रोब्लम लेख्नुहोस्..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    message(user_input, is_user=True)
-
-    with st.spinner("सोच्दैछु..."):
-        if qa_chain:
-            result = qa_chain({"question": user_input})
-            response = result["answer"]
-        else:
-            # Fallback if no manuals uploaded
-            response = llm.invoke(system_prompt + "\nUser: " + user_input).content
+    with st.chat_message("assistant"):
+        with st.spinner("सोच्दैछु..."):
+            if qa_chain:
+                result = qa_chain({"question": prompt})
+                response = result["answer"]
+            else:
+                # Fallback
+                response = llm.invoke(system_prompt + "\nUser: " + prompt).content
+            st.markdown(response)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
-    message(response, is_user=False)
