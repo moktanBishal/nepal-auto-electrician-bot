@@ -1,0 +1,10 @@
+streamlit>=1.38
+langchain
+langchain-community
+langchain-groq
+chromadb
+pypdf
+unstructured
+sentence-transformers
+streamlit-chat
+python-dotenv
