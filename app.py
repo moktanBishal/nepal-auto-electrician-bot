@@ -5,7 +5,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI  # New: Gemini LLM
 import os
 from dotenv import load_dotenv
 
@@ -15,8 +15,8 @@ load_dotenv()
 st.set_page_config(page_title="नेपाली अटो इलेक्ट्रिसियन AI सहयोगी", page_icon="🔧")
 st.title("🔧 Nepal Auto Electrician AI Bot (2014 देखि अनुभवी दाइहरूका लागि)")
 
-# Groq API Key (free from groq.com)
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+# Gemini API Key (free from aistudio.google.com)
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]  # Change from GROQ
 
 # Load PDFs (you will put Nepali/English manuals in /manuals folder)
 @st.cache_resource
@@ -42,9 +42,10 @@ system_prompt = """तपाईं नेपालमा २०१४ देख�
 पुराना गाडी (Bolero, Scorpio, Sumo, Hiace) र नयाँ इलेक्ट्रिक गाडी (BYD, Tata Nexon EV, MG) दुवैको ज्ञान छ।
 सधैं step-by-step सम्झाउनुहोस्। सम्मानजनक भाषा प्रयोग गर्नुहोस् ("दाइ", "सर")।"""
 
-llm = ChatGroq(
-    groq_api_key=GROQ_API_KEY,
-    model_name="llama-3.1-70b-versatile",
+# New: Gemini LLM (gemini-2.5-flash for speed/multimodal)
+llm = ChatGoogleGenerativeAI(
+    google_api_key=GEMINI_API_KEY,  # Change from Groq
+    model="gemini-2.5-flash",  # Or "gemini-2.5-pro" for deeper reasoning (slower)
     temperature=0.3
 )
 
